@@ -1,3 +1,4 @@
+from elasticsearch import Elasticsearch
 import requests
 from bs4 import BeautifulSoup
 import csv
@@ -10,6 +11,18 @@ if len(argv) != 3:
 
 URL = argv[1]
 r = requests.get(URL)
+
+es = Elasticsearch("http://localhost:9200")
+mapping = {
+    "question": {
+        "title": {"type": "text", "analyzer": "english"},
+        "description": {"type": "text", "analyzer": "english"},
+        "tags": {"type": "text", "analyzer": "english"},
+        "user": {"type": "keyword", "analyzer": "english"}
+    }
+}
+
+es.indices.create(index="questions", mappings=mappings)
 
 soup = BeautifulSoup(r.content, 'html.parser')
 
@@ -33,6 +46,13 @@ filename = argv[2]+'.csv'
 with open(filename, 'w', newline='') as f:
     w = csv.DictWriter(f, ['title', 'description', 'tags', 'user'])
     w.writeheader()
-    for q in questions:
+    for i, q in questions:
         w.writerow(q)
+        doc = {
+                "title": q["title"],
+                "description": q["description"],
+                "tags": q['tags'],
+                "user": q["user"]
+                }
+        es.index(index="questions", id=i, document=doc)
 print('done')
