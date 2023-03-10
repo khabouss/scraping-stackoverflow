@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import csv
 import sys
 from sys import argv
+import time
 
 if len(argv) != 3:
     sys.exit("Usage: python srap.py \"[page url]\" \"[output filename]\"")
@@ -13,16 +14,19 @@ URL = argv[1]
 r = requests.get(URL)
 
 es = Elasticsearch("http://localhost:9200")
-mapping = {
-    "question": {
-        "title": {"type": "text", "analyzer": "english"},
-        "description": {"type": "text", "analyzer": "english"},
-        "tags": {"type": "text", "analyzer": "english"},
-        "user": {"type": "keyword", "analyzer": "english"}
+mappings = {
+        "mappings": {
+    "properties": {
+        "title": {"type": "text"},
+        "description": {"type": "text"},
+        "tags": {"type": "text"},
+        "user": {"type": "keyword"}
+    }
     }
 }
 
-es.indices.create(index="questions", mappings=mappings)
+if not es.indices.exists(index="questions"):
+    es.indices.create(index="questions", body=mappings)
 
 soup = BeautifulSoup(r.content, 'html.parser')
 
@@ -46,7 +50,7 @@ filename = argv[2]+'.csv'
 with open(filename, 'w', newline='') as f:
     w = csv.DictWriter(f, ['title', 'description', 'tags', 'user'])
     w.writeheader()
-    for i, q in questions:
+    for q in questions:
         w.writerow(q)
         doc = {
                 "title": q["title"],
@@ -54,5 +58,6 @@ with open(filename, 'w', newline='') as f:
                 "tags": q['tags'],
                 "user": q["user"]
                 }
-        es.index(index="questions", id=i, document=doc)
+        i = round(time.time()*1000)
+        es.index(index="questions", doc_type="_doc", id=i, body=doc)
 print('done')
